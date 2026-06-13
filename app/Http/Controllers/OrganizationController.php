@@ -2,16 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Organization;
 use Illuminate\Http\Request;
-use \Illuminate\Http\JsonResponse;
-
-use \App\Models\Organization;
 
 class OrganizationController extends Controller
 {
-    public function store(Request $request): JsonResponse
+    public function store(Request $request): Organization
     {
-        $validated = $request->validate(['link' => ['required', 'string']]);
+        $validated = $request->validate([
+            'link' => ['required', 'string', 'unique:organizations,link',]
+        ]);
 
         return Organization::create($validated);
     }
