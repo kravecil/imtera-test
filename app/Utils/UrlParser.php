@@ -6,7 +6,7 @@ use InvalidArgumentException;
 
 class UrlParser
 {
-    public const YANDEX_MAP_URL_PATTERN = '#^https?://yandex\.ru/maps/org/([^/]+)/(\d+)$#';
+    public const YANDEX_MAP_URL_PATTERN = '#^https?://yandex\.ru/maps/org/([a-zA-Z0-9_-]+)/(\d+)/?$#';
 
     /**
      * Извлекает slug и id из URL Яндекс.Карт.
