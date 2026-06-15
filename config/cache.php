@@ -118,7 +118,7 @@ return [
     |
     */
 
-    'prefix' => env('CACHE_PREFIX', Str::slug((string) env('APP_NAME', 'laravel')).'-cache-'),
+    'prefix' => env('CACHE_PREFIX', Str::slug((string) env('APP_NAME', 'laravel')) . '-cache-'),
 
     /*
     |--------------------------------------------------------------------------
@@ -132,5 +132,7 @@ return [
     */
 
     'serializable_classes' => false,
+
+    'organization_ttl' => env('CACHE_ORGANIZATION_TTL', 3600),
 
 ];

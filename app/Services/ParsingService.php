@@ -12,10 +12,15 @@ use Playwright\Page\Page;
 use App\Utils\UrlParser;
 use Carbon\Carbon;
 use App\Exceptions\ParsingException;
+use Illuminate\Support\Facades\Cache;
+
 
 class ParsingService
 {
     private const YANDEX_MAP_BASE_URL = 'https://yandex.ru/maps/org';
+    private const CACHE_KEY_ORG_PREFIX = 'yandex_org_';
+    private const CACHE_KEY_REVIEWS_PREFIX = 'yandex_reviews_';
+
 
     private ?string $organizationName = null;
     private ?float $rating = null;
@@ -26,6 +31,14 @@ class ParsingService
 
     private ?BrowserContext $browser = null;
     private ?Page $page = null;
+
+    private int $cacheTtl;
+
+    public function __construct(?int $cacheTtl = null)
+    {
+        $this->cacheTtl = $cacheTtl ?? config('cache.organization_ttl', 3600);
+    }
+
 
     private function createBrowser(): void
     {
@@ -201,9 +214,14 @@ class ParsingService
     public function parseOrganization(string $url): void
     {
         $params = $this->parseUrl($url);
-        $orgUrl = $this->buildOrganizationUrl($params);
 
-        Log::info("Парсинг данных организации: {$orgUrl}");
+        // Проверяем кеш
+        if ($this->tryLoadFromCacheOrg($params)) {
+            return;
+        }
+
+        $orgUrl = $this->buildOrganizationUrl($params);
+        Log::info("Парсинг данных организации: {$orgUrl} (из кеша не найдено)");
 
         $this->createBrowser();
         $this->createPage();
@@ -217,6 +235,7 @@ class ParsingService
             }
 
             $this->extractDataFromHtml($html);
+            $this->saveToCacheOrg($params);
         } catch (Exception $e) {
             $msg = "Ошибка при парсинге {$orgUrl}: " . $e->getMessage();
             Log::error($msg, ['exception' => $e]);
@@ -229,9 +248,14 @@ class ParsingService
     public function parseReviews(string $url): void
     {
         $params = $this->parseUrl($url);
-        $reviewsUrl = $this->buildReviewsUrl($params);
 
-        Log::info("Парсинг отзывов: {$reviewsUrl}");
+        // Проверяем кеш
+        if ($this->tryLoadFromCacheReviews($params)) {
+            return;
+        }
+
+        $reviewsUrl = $this->buildReviewsUrl($params);
+        Log::info("Парсинг отзывов: {$reviewsUrl} (из кеша не найдено)");
 
         $this->createBrowser();
         $this->createPage();
@@ -242,6 +266,7 @@ class ParsingService
 
             $this->scrollPageUntilStable('.business-reviews-card-view__review');
             $this->extractReviews();
+            $this->saveToCacheReviews($params);
         } catch (Exception $e) {
             $msg = "Ошибка при парсинге отзывов {$reviewsUrl}: " . $e->getMessage();
             Log::error($msg, ['exception' => $e]);
@@ -270,5 +295,67 @@ class ParsingService
     public function getReviews(): array
     {
         return $this->reviews;
+    }
+
+    private function buildCacheKeyForOrganization(array $params): string
+    {
+        return self::CACHE_KEY_ORG_PREFIX . $params['id'];
+    }
+
+    private function buildCacheKeyForReviews(array $params): string
+    {
+        return self::CACHE_KEY_REVIEWS_PREFIX . $params['id'];
+    }
+
+    private function tryLoadFromCacheOrg(array $params): bool
+    {
+        $key = $this->buildCacheKeyForOrganization($params);
+        $data = Cache::get($key);
+
+        if ($data && is_array($data)) {
+            $this->organizationName = $data['organizationName'] ?? null;
+            $this->rating = $data['rating'] ?? null;
+            $this->ratingCount = $data['ratingCount'] ?? null;
+            $this->reviewCount = $data['reviewCount'] ?? null;
+            Log::info("Загружено из кеша данные организации: {$key}");
+            return true;
+        }
+
+        return false;
+    }
+
+    private function tryLoadFromCacheReviews(array $params): bool
+    {
+        $key = $this->buildCacheKeyForReviews($params);
+        $reviews = Cache::get($key);
+
+        if ($reviews && is_array($reviews)) {
+            $this->reviews = $reviews;
+            Log::info("Загружено из кеша отзывы: {$key}");
+            return true;
+        }
+
+        return false;
+    }
+
+    private function saveToCacheOrg(array $params): void
+    {
+        $key = $this->buildCacheKeyForOrganization($params);
+        $data = [
+            'organizationName' => $this->organizationName,
+            'rating' => $this->rating,
+            'ratingCount' => $this->ratingCount,
+            'reviewCount' => $this->reviewCount,
+        ];
+
+        Cache::put($key, $data, $this->cacheTtl);
+        Log::debug("Сохранено в кеш данные организации: {$key}");
+    }
+
+    private function saveToCacheReviews(array $params): void
+    {
+        $key = $this->buildCacheKeyForReviews($params);
+        Cache::put($key, $this->reviews, $this->cacheTtl);
+        Log::debug("Сохранено в кеш отзывы: {$key}");
     }
 }
