@@ -16,17 +16,17 @@ class ParsingService
 {
     private const YANDEX_MAP_BASE_URL = 'https://yandex.ru/maps/org';
 
-    private ?string $name = null;
+    private ?string $organizationName = null;
     private ?float $rating = null;
-    private ?int $ratesCount = null;
-    private ?int $reviewsCount = null;
+    private ?int $ratingCount = null;
+    private ?int $reviewCount = null;
 
     private array $reviews = [];
 
     private ?BrowserContext $browser = null;
     private ?Page $page = null;
 
-    private function initPlaywright(): void
+    private function createBrowser(): void
     {
         $this->browser = Playwright::chromium([
             'headless' => true,
@@ -39,10 +39,8 @@ class ParsingService
         ]);
     }
 
-    private function initPage(): void
+    private function createPage(): void
     {
-        Carbon::setLocale('ru');
-
         $this->page = $this->browser->newPage([
             'viewport' => ['width' => 1920, 'height' => 1080],
             'userAgent' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -52,214 +50,208 @@ class ParsingService
             ],
         ]);
 
-        // Bypass bot detection
         $this->browser->addInitScript("Object.defineProperty(navigator, 'webdriver', { get: () => undefined });");
         $this->page->evaluate("delete navigator.__proto__.webdriver");
     }
 
-    public function tearDown(): void
+    private function closeBrowser(): void
     {
-        if ($this->page) {
-            $this->page->close();
+        try {
+            $this->page?->close();
+        } finally {
             $this->page = null;
-        }
-
-        if ($this->browser) {
-            $this->browser->close();
+            $this->browser?->close();
             $this->browser = null;
         }
     }
 
-    public function parseCommon(string $url): void
+    private function parseUrl(string $url): array
     {
-        ['slug' => $organizationSlug, 'id' => $organizationId] = UrlParser::parseYandexMapsOrgUrl($url);
-
-        $url = self::YANDEX_MAP_BASE_URL . "/{$organizationSlug}/{$organizationId}";
-
-        logger("Начинаем парсингобщих данных [{$url}]");
-
-        $this->initPlaywright();
-        $this->initPage();
-
-        try {
-            $this->page?->goto($url, ['waitUntil' => 'load']);
-            $html = $this->page?->content();
-
-            if ($html === null) {
-                throw new Exception('Пустой HTML-контент страницы');
-            }
-
-            $this->loadAndExtractOrganizationData($html);
-        } catch (Exception $e) {
-            $message = "Ошибка при парсинге {$url}: " . $e->getMessage();
-            Log::error($message, ['exception' => $e]);
-            throw new Exception($message, 0, $e);
-        } finally {
-            $this->tearDown();
-        }
+        return UrlParser::parseYandexMapsOrgUrl($url);
     }
 
-    private function loadAndExtractOrganizationData(string $html): void
+    private function buildOrganizationUrl(array $params): string
+    {
+        return self::YANDEX_MAP_BASE_URL . "/{$params['slug']}/{$params['id']}";
+    }
+
+    private function buildReviewsUrl(array $params): string
+    {
+        return self::YANDEX_MAP_BASE_URL . "/{$params['slug']}/{$params['id']}/reviews";
+    }
+
+    private function extractDataFromHtml(string $html): void
     {
         $dom = new DOMDocument();
         libxml_use_internal_errors(true);
         $dom->loadHTML($html);
         $xpath = new DOMXPath($dom);
 
-        $this->extractNameFromDom($xpath);
-        $this->extractRatingFromDom($xpath);
-        $this->extractRatesCountFromDom($xpath);
-        $this->extractReviewsCountFromDom($xpath);
-    }
-
-    private function extractNameFromDom(DOMXPath $xpath): void
-    {
-        $this->name = $this->extractTextFromNodes(
-            $xpath->query('//h1[contains(@class, "orgpage-header-view__header")]')
+        $this->organizationName = $this->getTextFromNode($xpath->query('//h1[contains(@class, "orgpage-header-view__header")]'));
+        $this->rating = $this->parseRating($xpath->query('//span[contains(@class, "business-rating-badge-view__rating-text")]'));
+        $this->ratingCount = $this->getIntFromNode($xpath->query('//div[contains(@class, "business-header-rating-view__text")]'));
+        $this->reviewCount = $this->getIntFromNode(
+            $xpath->query('//div[contains(@class, "tabs-select-view__title") and contains(@class, "_name_reviews")]//div[contains(@class, "tabs-select-view__counter")]')
         );
     }
 
-    private function extractRatingFromDom(DOMXPath $xpath): void
+    private function getTextFromNode(\DOMNodeList|false|null $nodes): ?string
     {
-        $text = $this->extractTextFromNodes(
-            $xpath->query('//span[contains(@class, "business-rating-badge-view__rating-text")]')
-        );
-        if ($text !== null) {
-            $this->rating = $this->parseRatingValue($text);
-        }
+        return $nodes?->length ? trim($nodes->item(0)?->textContent ?? '') : null;
     }
 
-    private function extractRatesCountFromDom(DOMXPath $xpath): void
+    private function getIntFromNode(\DOMNodeList|false|null $nodes): ?int
     {
-        $this->ratesCount = $this->extractIntegerFromNodes(
-            $xpath->query('//div[contains(@class, "business-header-rating-view__text")]')
-        );
+        return $this->getIntFromString($this->getTextFromNode($nodes));
     }
 
-    private function extractReviewsCountFromDom(DOMXPath $xpath): void
+    private function getIntFromString(?string $text): ?int
     {
-        $this->reviewsCount = $this->extractIntegerFromNodes(
-            $xpath->query(
-                '//div[contains(@class, "tabs-select-view__title") and contains(@class, "_name_reviews")]'
-                    . '//div[contains(@class, "tabs-select-view__counter")]'
-            )
-        );
-    }
-
-
-    private function extractTextFromNodes(\DOMNodeList|false|null $nodes): ?string
-    {
-        return $nodes?->length ? trim($nodes->item(0)->textContent ?? '') : null;
-    }
-
-    private function extractIntegerFromNodes(\DOMNodeList|false|null $nodes): ?int
-    {
-        $text = $this->extractTextFromNodes($nodes);
         return $text !== null ? (int) filter_var($text, FILTER_SANITIZE_NUMBER_INT) : null;
     }
 
-    private function parseRatingValue(string $text): ?float
+    private function parseRating(\DOMNodeList|false|null $nodes): ?float
     {
+        $text = $this->getTextFromNode($nodes);
+        if ($text === null) return null;
+
         $normalized = str_replace(',', '.', preg_replace('/[^\d,\.]/', '', $text));
         return filter_var($normalized, FILTER_VALIDATE_FLOAT) !== false ? (float) $normalized : null;
     }
 
-    public function parseReviews(string $url): void
+    private function scrollPageUntilStable(string $locator, int $maxScrolls = 20, int $maxRepeats = 3): void
     {
-        ['slug' => $organizationSlug, 'id' => $organizationId] = UrlParser::parseYandexMapsOrgUrl($url);
+        $previousCount = 0;
+        $repeatCount = 0;
 
-        $url = self::YANDEX_MAP_BASE_URL . "/{$organizationSlug}/{$organizationId}/reviews";
+        for ($i = 0; $i < $maxScrolls; $i++) {
+            $this->page?->mouse()->wheel(0, 50000);
+            $currentCount = $this->page?->locator($locator)->count() ?? 0;
 
-        logger("Начинаем парсинг отзывов [{$url}]");
+            Log::info("Получено элементов: $currentCount");
 
-        $this->initPlaywright();
-        $this->initPage();
-
-        try {
-            $this->page?->goto($url, ['waitUntil' => 'load']);
-
-            $this->page?->waitForSelector('div.card-reviews-view');
-
-            $this->loadAndExtractReviewsData();
-        } catch (Exception $e) {
-            $message = "Ошибка при парсинге {$url}: " . $e->getMessage();
-            Log::error($message, ['exception' => $e]);
-            throw new Exception($message, 0, $e);
-        } finally {
-            $this->tearDown();
-        }
-    }
-
-    private function loadAndExtractReviewsData(): void
-    {
-        $this->loadAllReviews();
-        $this->processAllReviews();
-    }
-
-    private function loadAllReviews(): void
-    {
-        $reviewLocator = $this->page->locator('.business-reviews-card-view__review');
-
-        $this->page->mouse()->move(0, 0);
-
-        $retries = 0;
-        $count = $reviewLocator->count();
-        $prevCount = $count;
-        for ($i = 0; $i < 20; $i++) {
-            $this->page->mouse()->wheel(0, 50000);
-            $count = $reviewLocator->count();
-            Log::info("Получено отзывов: $count");
-
-            if ($prevCount == $count) {
-                $retries++;
-                if ($retries > 3) break;
+            if ($currentCount === $previousCount) {
+                $repeatCount++;
+                if ($repeatCount >= $maxRepeats) {
+                    Log::info("Достигнуто стабильное число элементов: $currentCount");
+                    break;
+                }
             } else {
-                $prevCount = $count;
+                $repeatCount = 0;
+                $previousCount = $currentCount;
             }
 
-            usleep(500000);
+            usleep(500_000);
         }
     }
 
-    private function processAllReviews(): void
+    private function extractReviews(): void
     {
-        try {
-            $reviewsLocator = $this->page->locator('.business-reviews-card-view__review');
-            $reviewsCount = $reviewsLocator->count();
+        $reviewLocators = $this->page->locator('.business-reviews-card-view__review');
+        $reviewCount = $reviewLocators->count();
 
-            for ($i = 0; $i < $reviewsCount; $i++) {
-                $review = $reviewsLocator->nth($i);
+        for ($i = 0; $i < $reviewCount; $i++) {
+            $review = $reviewLocators->nth($i);
 
-                $expandButton = $review->locator('.business-review-view__expand')->first();
-                if ($expandButton->count() > 0) {
-                    $expandButton->focus();
-                    $this->page->keyboard()->press('Enter');
+            try {
+                $expandBtn = $review->locator('.business-review-view__expand')->first();
+                if ($expandBtn->count() > 0) {
+                    $expandBtn->focus();
+                    $this->page?->keyboard()->press('Enter');
                 }
 
-                $author = $review->locator('.business-review-view__author-name span[itemprop="name"]')
-                    ->textContent();
+                $author = $review->locator('.business-review-view__author-name span[itemprop="name"]')->textContent();
                 $text = $review->locator('span.spoiler-view__text-container')->textContent();
-
-                $ratingAriaLabel = $review->locator('div.business-rating-badge-view__stars')
-                    ->getAttribute('aria-label');
-                $rating = $this->extractRatingFromAriaLabel($ratingAriaLabel);
-
-                $dateContent = $review->locator('.business-review-view__date meta[itemprop="datePublished"]')
-                    ->getAttribute('content');
-                $date = Carbon::parse($dateContent)->format('Y.m.d');
+                $ratingLabel = $review->locator('div.business-rating-badge-view__stars')->getAttribute('aria-label');
+                $rating = $this->extractRatingFromAriaLabel($ratingLabel);
+                $dateContent = $review->locator('.business-review-view__date meta[itemprop="datePublished"]')->getAttribute('content');
+                $date = $dateContent ? Carbon::parse($dateContent)->format('Y.m.d') : null;
 
                 $this->reviews[] = compact('author', 'text', 'rating', 'date');
+            } catch (Exception $e) {
+                Log::warning("Ошибка при парсинге отзыва #{$i}: " . $e->getMessage());
             }
-        } catch (Exception $e) {
-            $message = "Ошибка при обработке отзывов: " . $e->getMessage();
-            Log::error($message, ['exception' => $e]);
-            throw new Exception($message, 0, $e);
         }
     }
 
-    private function extractRatingFromAriaLabel(string $ariaLabel): int
+    private function extractRatingFromAriaLabel(?string $label): ?int
     {
-        preg_match('/(\d+(?:[.,]\d+)?)/', $ariaLabel, $matches);
-        return (int)$matches[1];
+        return $label && preg_match('/\d+(?:[.,]\d+)?/', $label, $match)
+            ? (int) $match[0]
+            : null;
+    }
+
+    public function parseOrganization(string $url): void
+    {
+        $params = $this->parseUrl($url);
+        $orgUrl = $this->buildOrganizationUrl($params);
+
+        Log::info("Парсинг данных организации: {$orgUrl}");
+
+        $this->createBrowser();
+        $this->createPage();
+
+        try {
+            $this->page?->goto($orgUrl, ['waitUntil' => 'load']);
+            $html = $this->page?->content();
+
+            if ($html === null) {
+                throw new Exception('Пустой HTML-контент страницы организации');
+            }
+
+            $this->extractDataFromHtml($html);
+        } catch (Exception $e) {
+            $msg = "Ошибка при парсинге {$orgUrl}: " . $e->getMessage();
+            Log::error($msg, ['exception' => $e]);
+            throw new Exception($msg, 0, $e);
+        } finally {
+            $this->closeBrowser();
+        }
+    }
+
+    public function parseReviews(string $url): void
+    {
+        $params = $this->parseUrl($url);
+        $reviewsUrl = $this->buildReviewsUrl($params);
+
+        Log::info("Парсинг отзывов: {$reviewsUrl}");
+
+        $this->createBrowser();
+        $this->createPage();
+
+        try {
+            $this->page?->goto($reviewsUrl, ['waitUntil' => 'load']);
+            $this->page?->waitForSelector('div.card-reviews-view');
+
+            $this->scrollPageUntilStable('.business-reviews-card-view__review');
+            $this->extractReviews();
+        } catch (Exception $e) {
+            $msg = "Ошибка при парсинге отзывов {$reviewsUrl}: " . $e->getMessage();
+            Log::error($msg, ['exception' => $e]);
+            throw new Exception($msg, 0, $e);
+        } finally {
+            $this->closeBrowser();
+        }
+    }
+
+    public function getOrganizationName(): ?string
+    {
+        return $this->organizationName;
+    }
+    public function getRating(): ?float
+    {
+        return $this->rating;
+    }
+    public function getRatingCount(): ?int
+    {
+        return $this->ratingCount;
+    }
+    public function getReviewCount(): ?int
+    {
+        return $this->reviewCount;
+    }
+    public function getReviews(): array
+    {
+        return $this->reviews;
     }
 }
