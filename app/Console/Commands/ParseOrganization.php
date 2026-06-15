@@ -7,7 +7,7 @@ use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 
 
-use \App\Services\ParsingService;
+use App\Services\Parsing\ParsingService;
 
 #[Signature('parse:organization {url}')]
 #[Description('Загрузить сведения об организации по ссылке')]
@@ -20,7 +20,7 @@ class ParseOrganization extends Command
     {
         $url = $this->argument('url');
 
-        $service->parseCommon($url);
+        $service->parseOrganization($url);
         dd($service);
 
         return 0;
