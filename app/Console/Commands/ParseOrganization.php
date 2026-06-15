@@ -20,6 +20,8 @@ class ParseOrganization extends Command
         $url = $this->argument('url');
 
         $service->parse($url);
+        
+        dd($service);
 
         return 0;
     }
