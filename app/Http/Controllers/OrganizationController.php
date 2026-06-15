@@ -6,6 +6,7 @@ use App\Models\Organization;
 use Illuminate\Http\Request;
 
 use App\Rules\ValidateYandexMapsUrlRule;
+use App\Jobs\ParseUrlJob;
 
 class OrganizationController extends Controller
 {
@@ -19,6 +20,12 @@ class OrganizationController extends Controller
                 new ValidateYandexMapsUrlRule(),
             ]
         ]);
-        return Organization::create($validated);
+        $organization = Organization::create($validated);
+
+        $job = new ParseUrlJob($organization->link);
+        dispatch($job);
+
+
+        return $organization;
     }
 }

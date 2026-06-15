@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 
 
 use \App\Services\ParsingService;
+use App\Jobs\ParseUrlJob;
 
 #[Signature('parse:organization {url}')]
 #[Description('Загрузить сведения об организации по ссылке')]
@@ -20,8 +21,13 @@ class ParseOrganization extends Command
     {
         $url = $this->argument('url');
 
-        $service->parseCommon($url);
-        dd($service);
+        // $service->parseOrganization($url);
+        // $service->parseReviews($url);
+
+        // dd($service);
+
+        $job = new ParseUrlJob($url);
+        dispatch($job);
 
         return 0;
     }
