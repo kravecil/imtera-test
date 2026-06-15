@@ -11,6 +11,7 @@ use Playwright\Browser\BrowserContext;
 use Playwright\Page\Page;
 use App\Utils\UrlParser;
 use Carbon\Carbon;
+use App\Exceptions\ParsingException;
 
 class ParsingService
 {
@@ -88,11 +89,18 @@ class ParsingService
         $xpath = new DOMXPath($dom);
 
         $this->organizationName = $this->getTextFromNode($xpath->query('//h1[contains(@class, "orgpage-header-view__header")]'));
+        if ($this->organizationName === null) throw new ParsingException('Не удалось получить название организации');
+
         $this->rating = $this->parseRating($xpath->query('//span[contains(@class, "business-rating-badge-view__rating-text")]'));
+        if ($this->rating === null) throw new ParsingException('Не удалось получить рейтинг организации');
+
         $this->ratingCount = $this->getIntFromNode($xpath->query('//div[contains(@class, "business-header-rating-view__text")]'));
+        if ($this->ratingCount === null) throw new ParsingException('Не удалось получить количество оценок организации');
+
         $this->reviewCount = $this->getIntFromNode(
             $xpath->query('//div[contains(@class, "tabs-select-view__title") and contains(@class, "_name_reviews")]//div[contains(@class, "tabs-select-view__counter")]')
         );
+        if ($this->reviewCount === null) throw new ParsingException('Не удалось получить количество отзывов');
     }
 
     private function getTextFromNode(\DOMNodeList|false|null $nodes): ?string
@@ -161,11 +169,20 @@ class ParsingService
                 }
 
                 $author = $review->locator('.business-review-view__author-name span[itemprop="name"]')->textContent();
+                if ($author === null) throw new ParsingException('Не удалось получить имя автора');
+
                 $text = $review->locator('span.spoiler-view__text-container')->textContent();
+                if ($text === null) throw new ParsingException('Не удалось получить текст отзыва');
+
                 $ratingLabel = $review->locator('div.business-rating-badge-view__stars')->getAttribute('aria-label');
+                if ($ratingLabel === null) throw new ParsingException('Не удалось получить рейтинг отзыва');
+
                 $rating = $this->extractRatingFromAriaLabel($ratingLabel);
+
                 $dateContent = $review->locator('.business-review-view__date meta[itemprop="datePublished"]')->getAttribute('content');
-                $date = $dateContent ? Carbon::parse($dateContent)->format('Y.m.d') : null;
+                if ($dateContent === null) throw new ParsingException('Не удалось получить дату отзыва');
+
+                $date = Carbon::parse($dateContent)->format('Y.m.d');
 
                 $this->reviews[] = compact('author', 'text', 'rating', 'date');
             } catch (Exception $e) {
@@ -196,7 +213,7 @@ class ParsingService
             $html = $this->page?->content();
 
             if ($html === null) {
-                throw new Exception('Пустой HTML-контент страницы организации');
+                throw new ParsingException('Пустой HTML-контент страницы организации');
             }
 
             $this->extractDataFromHtml($html);
