@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Organization;
 use Illuminate\Http\Request;
 
+use App\Rules\ValidateYandexMapsUrlRule;
+
 class OrganizationController extends Controller
 {
     public function store(Request $request): Organization
@@ -14,10 +16,9 @@ class OrganizationController extends Controller
                 'required',
                 'string',
                 'unique:organizations,link',
-                'regex:/https:\/\/yandex.ru\/maps\/-\/[A-Za-z0-9_-]{8}/i'
+                new ValidateYandexMapsUrlRule(),
             ]
         ]);
-
         return Organization::create($validated);
     }
 }
