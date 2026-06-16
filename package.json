@@ -17,6 +17,7 @@
     "dependencies": {
         "@quasar/extras": "^2.0.1",
         "@quasar/vite-plugin": "^1.12.0",
+        "axios": "^1.18.0",
         "pinia": "^3.0.4",
         "quasar": "^2.20.0",
         "sass-embedded": "^1.100.0",

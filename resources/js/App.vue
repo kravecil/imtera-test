@@ -1,9 +1,14 @@
 <template>
-    <q-input v-model="text" label="Standard" />
-    <q-btn color="primary" label="Primary" />
+    <router-view />
 </template>
 
 <script setup>
-import { ref } from 'vue'
-const text = ref('')
+import { onMounted } from 'vue'
+import { useAuth } from '@/composables/useAuth'
+
+const { getCsrfToken } = useAuth()
+
+onMounted(() => {
+    getCsrfToken().then(() => console.log('CSRF токен получен'))
+})
 </script>
