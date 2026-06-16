@@ -184,10 +184,11 @@ class ParsingService
                 $text = $review->locator('span.spoiler-view__text-container')->textContent();
                 if ($text === null) throw new ParsingException('Не удалось получить текст отзыва');
 
-                $ratingLabel = $review->locator('div.business-rating-badge-view__stars')->getAttribute('aria-label');
-                if ($ratingLabel === null) throw new ParsingException('Не удалось получить рейтинг отзыва');
-
-                $rating = $this->extractRatingFromAriaLabel($ratingLabel);
+                $ratingLabelLocator = $review->locator('div.business-rating-badge-view__stars');
+                if ($ratingLabelLocator->count() > 0) {
+                    $ratingLabel = $ratingLabelLocator->getAttribute('aria-label');
+                    $rating = $this->extractRatingFromAriaLabel($ratingLabel);
+                }
 
                 $dateContent = $review->locator('.business-review-view__date meta[itemprop="datePublished"]')->getAttribute('content');
                 if ($dateContent === null) throw new ParsingException('Не удалось получить дату отзыва');
