@@ -38,11 +38,11 @@ export const useOrganizationStore = defineStore("organization", () => {
         isEmpty.value = true;
 
         name.value = "";
-        name.rating = 0.0;
-        name.ratingCount = 0;
-        name.reviewCount = 0;
+        rating.value = 0.0;
+        ratingCount.value = 0;
+        reviewCount.value = 0;
 
-        name.reviews = [];
+        reviews.value = [];
     };
 
     return {
