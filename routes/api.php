@@ -14,5 +14,5 @@ Route::middleware('auth:sanctum')->group(function () {
         return $request->user();
     });
 
-    Route::post('/organizations', [OrganizationController::class, 'store']);
+    Route::get('/organizations', [OrganizationController::class, 'show']);
 });

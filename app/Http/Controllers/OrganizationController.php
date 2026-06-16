@@ -7,25 +7,31 @@ use Illuminate\Http\Request;
 
 use App\Rules\ValidateYandexMapsUrlRule;
 use App\Jobs\ParseUrlJob;
+use App\Services\ParsingService;
+use App\Http\Resources\OrganizationResource;
 
 class OrganizationController extends Controller
 {
-    public function store(Request $request): Organization
+    public function show(Request $request): OrganizationResource
     {
         $validated = $request->validate([
             'link' => [
                 'required',
                 'string',
-                'unique:organizations,link',
                 new ValidateYandexMapsUrlRule(),
             ]
         ]);
-        $organization = Organization::create($validated);
+        $organization = Organization::firstOrCreate($validated);
 
-        $job = new ParseUrlJob($organization->link);
-        dispatch($job);
+        // $job = new ParseUrlJob($organization->link);
+        // dispatch($job);
+
+        $service = new ParsingService();
+
+        $service->parseOrganization($organization->link);
+        $service->parseReviews($organization->link);
 
 
-        return $organization;
+        return OrganizationResource::make($service);
     }
 }
