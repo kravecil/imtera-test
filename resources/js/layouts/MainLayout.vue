@@ -4,7 +4,8 @@
             <q-toolbar class="q-pa-sm">
                 <q-toolbar-title>
                     <q-input dark outlined dense label-color="white" v-model="searchField"
-                        label="Укажите ссылку организации">
+                        :rules="[val => !!val || 'Обязательное поле', val => !!val && linkPattern.test(val) || 'Некорректная ссылка на организацию на Яндекс.Картах']"
+                        lazy-rules label="Укажите ссылку организации">
                         <template v-slot:prepend>
                             <q-icon name="search" />
                         </template>
@@ -36,6 +37,8 @@ import { useRouter } from "vue-router";
 const auth = useAuthStore();
 const { getUser, logout } = useAuth();
 const router = useRouter()
+
+const linkPattern = /^https?:\/\/yandex\.ru\/maps\/org\/([a-zA-Z0-9._-]+)\/(\d+)(?:\/|\?|#|$)/
 
 const searchField = ref('')
 
