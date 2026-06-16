@@ -17,9 +17,9 @@ export function useAuth() {
         formData.append("password", password);
 
         try {
-            await post("/api/login", formData, {
+            const resp = await post("/api/login", formData, {
                 headers: {
-                    "Accept": "application/json",
+                    Accept: "application/json",
                     "Content-Type": "multipart/form-data",
                 },
             });
@@ -28,8 +28,27 @@ export function useAuth() {
         }
     };
 
+    const logout = async () => {
+        try {
+            await post("/api/logout");
+        } catch (error) {
+            throw new Error(error.message);
+        }
+    };
+
+    const getUser = async () => {
+        try {
+            const resp = await get("/api/user");
+            return resp.data;
+        } catch (error) {
+            throw new Error(error.message);
+        }
+    };
+
     return {
-        login,
         getCsrfToken,
+        login,
+        logout,
+        getUser,
     };
 }
