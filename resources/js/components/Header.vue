@@ -36,7 +36,7 @@ const organization = useOrganizationStore();
 const { getUser, logout } = useAuth();
 const router = useRouter()
 
-const urlField = ref('https://yandex.ru/maps/org/gipnoz/145073242257') // TODO
+const urlField = ref('')
 
 const linkPattern = /^https?:\/\/yandex\.ru\/maps\/org\/([a-zA-Z0-9._-]+)\/(\d+)(?:\/|\?|#|$)/
 

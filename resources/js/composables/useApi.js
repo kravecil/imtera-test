@@ -1,4 +1,5 @@
 import { ref } from "vue";
+import { Notify } from "quasar";
 import { api } from "@/api/api";
 
 export function useApi() {
@@ -46,6 +47,11 @@ export function useApi() {
             }
 
             error.value = message;
+            Notify.create({
+                type: "negative",
+                message: message,
+                timeout: 5000,
+            });
             throw new Error(message);
         } finally {
             loading.value = false;
