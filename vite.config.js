@@ -1,24 +1,35 @@
-import { defineConfig } from 'vite';
-import laravel from 'laravel-vite-plugin';
-import { bunny } from 'laravel-vite-plugin/fonts';
-import tailwindcss from '@tailwindcss/vite';
+import vue from "@vitejs/plugin-vue";
+import laravel from "laravel-vite-plugin";
+import { defineConfig } from "vite";
+import { quasar, transformAssetUrls } from "@quasar/vite-plugin";
+import { join } from "node:path";
 
 export default defineConfig({
     plugins: [
-        laravel({
-            input: ['resources/css/app.css', 'resources/js/app.js'],
-            refresh: true,
-            fonts: [
-                bunny('Instrument Sans', {
-                    weights: [400, 500, 600],
-                }),
-            ],
+        laravel(["resources/js/app.js"]),
+        vue({
+            template: {
+                transformAssetUrls: {
+                    base: null,
+                    includeAbsolute: false,
+                },
+            },
         }),
-        tailwindcss(),
+        quasar({
+            sassVariables: join(
+                import.meta.dirname,
+                "resources/js/quasar-variables.sass",
+            ),
+        }),
     ],
     server: {
         watch: {
-            ignored: ['**/storage/framework/views/**'],
+            ignored: ["**/storage/framework/views/**"],
+        },
+    },
+    resolve: {
+        alias: {
+            "@": "/resources/js",
         },
     },
 });
