@@ -105,15 +105,12 @@ class ParsingService
         if ($this->organizationName === null) throw new ParsingException('Не удалось получить название организации');
 
         $this->rating = $this->parseRating($xpath->query('//span[contains(@class, "business-rating-badge-view__rating-text")]'));
-        if ($this->rating === null) throw new ParsingException('Не удалось получить рейтинг организации');
 
         $this->ratingCount = $this->getIntFromNode($xpath->query('//div[contains(@class, "business-header-rating-view__text")]'));
-        if ($this->ratingCount === null) throw new ParsingException('Не удалось получить количество оценок организации');
 
         $this->reviewCount = $this->getIntFromNode(
             $xpath->query('//div[contains(@class, "tabs-select-view__title") and contains(@class, "_name_reviews")]//div[contains(@class, "tabs-select-view__counter")]')
         );
-        if ($this->reviewCount === null) throw new ParsingException('Не удалось получить количество отзывов');
     }
 
     private function getTextFromNode(\DOMNodeList|false|null $nodes): ?string
