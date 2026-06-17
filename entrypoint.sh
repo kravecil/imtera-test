@@ -14,6 +14,7 @@ echo "Installing Node dependencies..."
 
 if [ ! -d node_modules ] || [ -z "$(ls -A node_modules 2>/dev/null)" ]; then
     npm install
+    npm run build
 fi
 
 echo "Installing Playwright browsers..."
