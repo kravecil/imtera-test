@@ -22,6 +22,15 @@ if [ ! -d /ms-playwright ] || [ -z "$(ls -A /ms-playwright 2>/dev/null)" ]; then
     npx playwright install
 fi
 
+echo "Running database migrations..."
+if [ ! -f storage/app/.migrations_run ]; then
+    php artisan migrate:fresh --seed
+    touch storage/app/.migrations_run
+else
+    echo "Migrations already run, skipping."
+fi
+
+
 
 echo "Starting Laravel..."
 
